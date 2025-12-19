@@ -1,5 +1,6 @@
 #include "Module.h"
 #include "Patcher.h"
+#include "ModuleConfig.h"
 #include "Grid.h"
 #include <string>
 #include <map>
@@ -8,38 +9,41 @@
 class ModuleBuilder
 {
 public:
-  class BankInfo
+  struct BankInfo
   {
-  public:
-    Module::Type m_Type;
-    const char* m_Name;
-    const char* m_Description;
+    const ModuleConfig::Type type;
+    const char* const name;
+    const char* const description;
 
-    constexpr BankInfo() : m_Type(Module::Type::NONE), m_Name(""), m_Description("") {}
+    constexpr BankInfo(ModuleConfig::Type type, const char* name, const char* description) 
+    : type(type), name(name), description(description) {}
 
-    constexpr BankInfo(Module::Type type, const char* name, const char* description) 
-    : m_Type(type), m_Name(name), m_Description(description) {}
+    constexpr BankInfo() 
+    : type(ModuleConfig::Type::NONE), name(""), description("") {}
   };
+
 public:
   static void init();
 
   static ModuleBuilder& getInstance();
 
-  static Module* createModule(Module::Type type, int row, int col);
+  static Module* createModule(ModuleConfig::Type type, int row, int col);
 
-  static Module* buildFromString(std::string s);
+  static Module* buildFromString(std::string_view s);
 
-  static void deleteModule(Module* m, Patcher* p);
+  static void deleteModule(Module* m);
 
-  static void displayBank(size_t index);
+  static void displayBank(int position);
 
   static void slideBankWindow(int amt);
 
-  static Module::Type bankType(size_t bankIndex);
+  static ModuleConfig::Type bankType(size_t bankIndex);
 
   static const char* bankName(size_t bankIndex);
 
-  static bool canCreate(int position) { return !Grid::isModuleAt(position) && Grid::isValid(position); }
+  static bool canCreate(int position) { return Grid::isValid(position) && !Grid::isModuleAt(position); }
+
+  static void registerModule(ModuleConfig::Info info, std::function<Module*()> creatorFunc);
 
 private:
   ModuleBuilder() = default;  

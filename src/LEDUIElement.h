@@ -1,51 +1,68 @@
-#include "LEDManager.h"
+#pragma once
+#include "UIElements.h"
+#include "LEDFrameBuffer.h"
 #include <initializer_list>
 
+//Base class for LED UI elements
 class LEDUIElement
 {
 public:
-  struct LED 
-  { 
-    uint32_t color;
-    uint8_t x; 
-    uint8_t y; 
+  LEDUIElement(LEDFrame* frame) : m_Frame(frame) {}
 
-    LED() : color(0), x(-1), y(-1) {}
-    LED(uint32_t color, uint8_t x, uint8_t y) : color(color), x(x), y(y) {}
-    LED(uint32_t color, uint8_t position) : color(color), x(position / Grid::COLS), y(position % Grid::ROWS) {}
-  };
-
-  std::vector<LED> m_ActiveLEDs;
 protected:
-  virtual void render(const LEDManager& ledManager) = 0;
-  LEDUIElement(std::initializer_list<LED> leds) : m_ActiveLEDs(leds) {}
+  virtual void draw() = 0;
 
-  LEDUIElement(std::initializer_list<uint32_t> ledColors) 
-  {
-    int position = 0;
-    for (auto& color : ledColors)
-    {
-      m_ActiveLEDs.emplace_back(color, position);
-      position++;
-    }
-  }
+protected:
+  LEDFrame* m_Frame;
 };
 
-class FileBrowserElement : public LEDUIElement
+class KeyboardLEDElement : public LEDUIElement
 {
 public:
-  static constexpr uint32_t EMPTY_COLOR = 0x00FF00;
-public:
-  FileBrowserElement() 
-  : LEDUIElement({EMPTY_COLOR, EMPTY_COLOR, EMPTY_COLOR, EMPTY_COLOR, EMPTY_COLOR, EMPTY_COLOR, EMPTY_COLOR, EMPTY_COLOR})
-  {}
+  static constexpr size_t NUM_KEYS = KeyboardElement::NUM_KEYS;
 
-  void render(const LEDManager& ledManager) 
+  static constexpr uint32_t KEY_COLOR = 0x000606;
+  static constexpr uint32_t LIGHTER_KEY_COLOR = 0x008888;
+  static constexpr uint32_t NUMBER_KEY_COLOR = 0x080808;
+  static constexpr uint32_t BACKSPACE_KEY_COLOR = 0x060626;
+  static constexpr uint32_t ENTER_KEY_COLOR = 0x008F00;
+  static constexpr uint32_t ESCAPE_KEY_COLOR = 0x8F0000;
+
+public:
+  KeyboardLEDElement(LEDFrame* frame) : LEDUIElement(frame) {}
+
+  void draw() override
   {
-  /*A B C D E F G H
-    I J K L M N O P
-    Q R S T U V W X
-    Y Z 0 1 2 3 4 5
-    6 7 8 9 _ - < >*/
+    if (!m_Frame) { 
+      return; 
+    }
+
+    constexpr static uint8_t START_POS = Grid::COLS * 2;
+
+    for (size_t key = 0; key < NUM_KEYS; key++)
+    {
+      const uint8_t row = (START_POS + key) / Grid::COLS;
+      const uint8_t col = (START_POS + key) % Grid::COLS;
+      uint32_t color = (key % 2 == 0) ? LIGHTER_KEY_COLOR : KEY_COLOR;
+
+      switch (key)
+      {
+        case KeyboardElement::BACKSPACE_KEY:
+          color = BACKSPACE_KEY_COLOR; break;
+
+        case KeyboardElement::ENTER_KEY:
+          color = ENTER_KEY_COLOR; break;
+
+        case KeyboardElement::ESCAPE_KEY:
+          color = ESCAPE_KEY_COLOR; break;
+
+        default:
+          if (key >= KeyboardElement::ZERO_KEY && key < KeyboardElement::BACKSPACE_KEY) {
+            color = NUMBER_KEY_COLOR;
+          }
+          break;
+      }
+      m_Frame->drawPixel(row, col, color);
+    }
   }
 };

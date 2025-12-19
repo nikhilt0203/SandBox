@@ -6,15 +6,25 @@ class Module;
 class Port
 {
 public:
-  Port();
-  Port(const char* name);
-  bool isFree() const;
+  Port(AudioStream* device, int devicePortNum)
+  : m_Device(device), 
+    m_DevicePortNum(devicePortNum)
+  {}
 
+  Port(const char* name, int modulePortNum, int devicePortNum) 
+  : m_DevicePortNum(devicePortNum), 
+    m_ModulePortNum(modulePortNum), 
+    m_Name(name)
+  {}
+
+  bool isFree() const { return m_ConnectedModule == nullptr && m_ModulePortNum != -1; }
+  
 public:
-  Module* m_ConnectedModule;
-  AudioStream* m_Device;
-  uint8_t m_DevicePortNum;
-  const char* m_Name;
+  Module* m_ConnectedModule{nullptr};
+  AudioStream* m_Device{nullptr};
+  int m_DevicePortNum{-1};
+  int m_ModulePortNum{-1};
+  const char* m_Name{nullptr};
 
 public:
   static constexpr const char* INPUT_NAME = "in";

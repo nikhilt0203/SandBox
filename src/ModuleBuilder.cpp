@@ -1,88 +1,64 @@
-#include "ModuleBuilder.h"
-#include "USBOutput.h"
-#include "Oscillator.h"
-#include "LFO.h"
-#include "VCA.h"
-#include "VCF.h"
-#include "Delay.h"
-#include "Mixer.h"
-#include "Amplifier.h"
-#include "Mult.h"
-#include "Sequencer.h"
-#include "Envelope.h"
-#include "DigitalCombine.h"
-#include "Bitcrusher.h"
-#include "DCGenerator.h"
-#include "Oscilloscope.h"
+#include "modules/USBOutput.h"
+#include "modules/Oscillator.h"
+#include "modules/LFO.h"
+#include "modules/VCA.h"
+#include "modules/VCF.h"
+#include "modules/Delay.h"
+#include "modules/Mixer.h"
+#include "modules/Amplifier.h"
+#include "modules/Mult.h"
+#include "modules/Sequencer.h"
+#include "modules/Envelope.h"
+#include "modules/DigitalCombine.h"
+#include "modules/Bitcrusher.h"
+#include "modules/DCGenerator.h"
+#include "modules/Oscilloscope.h"
+#include "modules/NoiseGenerator.h"
 #include "Patcher.h"
 #include "Grid.h"
+#include "UIElements.h"
 #include <string>
 #include <map>
 #include <functional>
+#include "ModuleBuilder.h"
 
-
-struct ModuleDependencies
+void registerModules()
 {
-  PortManager portManager;
-  ModuleBuilder moduleBuilder;
-  IDGenerator idGenerator;
-  ModuleUIElement uiElement;
-};
-
-static std::map<Module::Type, std::function<Module*(int, int)>> moduleFactory = {
-    { Module::Type::USBOUT,      [](int r, int c) { return new USBOutput(r, c); } },
-    { Module::Type::OSCILLATOR,  [](int r, int c) { return new Oscillator(r, c); } },
-    { Module::Type::LFO,         [](int r, int c) { return new LFO(r, c); } },
-    { Module::Type::MIXER,       [](int r, int c) { return new Mixer(r, c); } },
-    { Module::Type::VCF,         [](int r, int c) { return new VCF(r, c); } },
-    { Module::Type::COMBINE,     [](int r, int c) { return new DigitalCombine(r, c); } },
-    { Module::Type::BITCRUSHER,  [](int r, int c) { return new Bitcrusher(r, c); } },
-    { Module::Type::SEQUENCER,   [](int r, int c) { return new Sequencer(r, c); } },
-    { Module::Type::VCA,         [](int r, int c) { return new VCA(r, c); } },
-    { Module::Type::MULT,        [](int r, int c) { return new Mult(r, c); } },
-    { Module::Type::DCGENERATOR, [](int r, int c) { return new DCGenerator(r, c); } },
-    { Module::Type::ENVELOPE,    [](int r, int c) { return new Envelope(r, c); } },
-    { Module::Type::AMPLIFIER,   [](int r, int c) { return new Amplifier(r, c); } },
-    { Module::Type::DELAY,       [](int r, int c) { return new Delay(r, c); } },
-    { Module::Type::OSCILLOSCOPE,[](int r, int c) { return new Oscilloscope(r, c); } }
-  };
-
-static std::vector<ModuleBuilder::BankInfo> allBankOptions{{ 
-    {Module::Type::OSCILLATOR,   Oscillator::INFO.NAME, Oscillator::INFO.DESCRIPTION},
-    {Module::Type::LFO,          LFO::INFO.NAME, "Outputs a low-frequency waveform."},
-    {Module::Type::VCF,          VCF::INFO.NAME, VCF::INFO.DESCRIPTION},
-    {Module::Type::MIXER,        Mixer::INFO.NAME, Mixer::INFO.DESCRIPTION},
-    {Module::Type::VCA,          VCA::INFO.NAME, VCA::INFO.DESCRIPTION},
-    {Module::Type::ENVELOPE,     Envelope::NAME, ""},
-    {Module::Type::SEQUENCER,    Sequencer::NAME, ""},
-    {Module::Type::USBOUT,       USBOutput::NAME, ""},
-    {Module::Type::MULT,         Mult::INFO.NAME, Mult::INFO.DESCRIPTION},
-    {Module::Type::DELAY,        Delay::NAME, ""},
-    {Module::Type::DCGENERATOR,  DCGenerator::NAME, ""},
-    {Module::Type::BITCRUSHER,   Bitcrusher::NAME, ""},
-    {Module::Type::AMPLIFIER,    Amplifier::INFO.NAME, ""},
-    {Module::Type::COMBINE,      DigitalCombine::NAME, ""},
-    {Module::Type::OSCILLOSCOPE, Oscilloscope::INFO.NAME, Oscilloscope::INFO.DESCRIPTION}
-  }};
-
-void addBankOption(Module::Type type, const char* name, const char* description)
-{
-  allBankOptions.push_back({type, name, description});
+  //Defines the order that the modules appear in the bank.
+  
+  ModuleBuilder::registerModule(Oscillator::INFO,     [](){ return new Oscillator(); });
+  ModuleBuilder::registerModule(LFO::INFO,            [](){ return new LFO(); });
+  ModuleBuilder::registerModule(VCF::INFO,            [](){ return new VCF(); });
+  ModuleBuilder::registerModule(Mixer::INFO,          [](){ return new Mixer(); });
+  ModuleBuilder::registerModule(VCA::INFO,            [](){ return new VCA(); });
+  ModuleBuilder::registerModule(Envelope::INFO,       [](){ return new Envelope(); });
+  ModuleBuilder::registerModule(Sequencer::INFO,      [](){ return new Sequencer(); });
+  ModuleBuilder::registerModule(USBOutput::INFO,      [](){ return new USBOutput(); });
+  ModuleBuilder::registerModule(Oscilloscope::INFO,   [](){ return new Oscilloscope(); });
+  ModuleBuilder::registerModule(Mult::INFO,           [](){ return new Mult(); });
+  ModuleBuilder::registerModule(DCGenerator::INFO,    [](){ return new DCGenerator(); });
+  ModuleBuilder::registerModule(Delay::INFO,          [](){ return new Delay(); });
+  ModuleBuilder::registerModule(Amplifier::INFO,      [](){ return new Amplifier(); });
+  ModuleBuilder::registerModule(Bitcrusher::INFO,     [](){ return new Bitcrusher(); });
+  ModuleBuilder::registerModule(DigitalCombine::INFO, [](){ return new DigitalCombine(); });
+  ModuleBuilder::registerModule(NoiseGenerator::INFO, [](){ return new NoiseGenerator(); });
 }
 
-std::array<ModuleBuilder::BankInfo*, 8> ModuleBuilder::bankOptions;
+static std::map<ModuleConfig::Type, std::function<Module*()>> moduleFactory;
+
+static std::vector<ModuleBuilder::BankInfo> allBankOptions;
+
+std::array<ModuleBuilder::BankInfo*, Grid::COLS> ModuleBuilder::bankOptions;
 
 void ModuleBuilder::init()
 {
   Grid::init();
-  for (size_t i = 0; i < bankOptions.size(); i++)
-    bankOptions[i] = &allBankOptions[i];
-}
+  registerModules();
 
-int numModuleTypes;
-void init(std::initializer_list<Module::Type> types)
-{
-  numModuleTypes = types.size();
+  for (size_t i{}; i < bankOptions.size(); i++)
+  {
+    bankOptions[i] = &allBankOptions[i % allBankOptions.size()];
+  }
 }
 
 ModuleBuilder& ModuleBuilder::getInstance()
@@ -91,7 +67,17 @@ ModuleBuilder& ModuleBuilder::getInstance()
   return instance;
 }
 
-Module* ModuleBuilder::createModule(Module::Type type, int row, int col)
+void placeModule(Module* m, int row, int col)
+{
+  if (!m) 
+  { 
+    return; 
+  }
+  m->getLEDElement().setPosition(row, col);
+  Grid::updateSquare(Grid::SquareState::MODULE, row, col);
+}
+
+Module* ModuleBuilder::createModule(ModuleConfig::Type type, int row, int col)
 {
   Module* newModule = nullptr;
   int position = Grid::toPosition(row, col);
@@ -101,7 +87,7 @@ Module* ModuleBuilder::createModule(Module::Type type, int row, int col)
     Serial.printf("Error: Cannot create module at (%d, %d)\n", row, col);
     return nullptr;
   }
-  
+
   auto it = moduleFactory.find(type);
 
   if (it == moduleFactory.end())
@@ -111,90 +97,158 @@ Module* ModuleBuilder::createModule(Module::Type type, int row, int col)
   }
 
   AudioNoInterrupts();
-  newModule = it->second(row, col);
+
+  if (newModule = it->second(); newModule)
+  {
+    placeModule(newModule, row, col);
+
+    if (newModule->getType() == ModuleConfig::Type::SEQUENCER) 
+    {
+      Sequencer::createSteps(static_cast<Sequencer&>(*newModule));
+    }
+
+    AudioInterrupts();
+    return newModule;
+  }
+
   AudioInterrupts();
-  return newModule;
+  return nullptr;
 }
 
-Module* ModuleBuilder::buildFromString(std::string s) 
+Module* ModuleBuilder::buildFromString(std::string_view s) 
 {
-  std::string name = s.substr(0, s.find("{"));
-  
-  if (name == USBOutput::SERIALIZATION_NAME) 
-    return USBOutput::buildFromString(s);
+  Serial.println("Building module from string: " + String(s.data()));
+  std::string_view name = s.substr(0, s.find("{"));
 
-  if (name == Oscillator::INFO.NAME) 
-    return Oscillator::buildFromString(s);
+  Module* module = nullptr;
 
-  if (name == LFO::NAME) 
-    return LFO::buildFromString(s);
+  if (name == USBOutput::INFO.NAME) 
+  {
+    module = USBOutput::buildFromString(s);
+  }
+  else if (name == Oscillator::INFO.NAME) 
+  {
+    module = Oscillator::buildFromString(s);
+  }
+  else if (name == LFO::INFO.NAME) 
+  {
+    module = LFO::buildFromString(s);
+  }
+  else if (name == Mixer::INFO.NAME) 
+  {
+    module = Mixer::buildFromString(s);
+  }
+  else if (name == VCF::INFO.NAME) 
+  {
+    module = VCF::buildFromString(s);
+  }
+  else if (name == DigitalCombine::INFO.NAME) 
+  {
+    module = DigitalCombine::buildFromString(s);
+  }
+  else if (name == Bitcrusher::INFO.NAME) 
+  {
+    module = Bitcrusher::buildFromString(s);
+  }
+  else if (name == Sequencer::INFO.NAME) 
+  {
+    module = Sequencer::buildFromString(s);
+  }
+  else if (name == Delay::INFO.NAME) 
+  {
+    module = Delay::buildFromString(s);
+  }
+  else if (name == VCA::INFO.NAME) 
+  {
+    module = VCA::buildFromString(s);
+  }
+  else if (name == Amplifier::INFO.NAME) 
+  {
+    module = Amplifier::buildFromString(s);
+  }
+  else if (name == Mult::INFO.NAME) 
+  {
+    module = Mult::buildFromString(s);
+  }
+  else if (name == Envelope::INFO.NAME) 
+  {
+    module = Envelope::buildFromString(s);
+  }
+  else if (name == DCGenerator::INFO.NAME) 
+  {
+    module = DCGenerator::buildFromString(s);
+  }
+  else if (name == Oscilloscope::INFO.NAME) 
+  {
+    module = Oscilloscope::buildFromString(s);
+  }
+  else if (name == NoiseGenerator::INFO.NAME) 
+  {
+    module = NoiseGenerator::buildFromString(s);
+  }
+  else if (!module) 
+  {
+    return nullptr;
+  }
 
-  if (name == Mixer::INFO.NAME) 
-    return Mixer::buildFromString(s);
-
-  if (name == VCF::INFO.NAME) 
-    return VCF::buildFromString(s);
-
-  if (name == DigitalCombine::NAME) 
-    return DigitalCombine::buildFromString(s);
-
-  if (name == Bitcrusher::NAME) 
-    return Bitcrusher::buildFromString(s);
-
-  if (name == Sequencer::NAME) 
-    return Sequencer::buildFromString(s);
-
-  if (name == Delay::NAME) 
-    return Delay::buildFromString(s);
-
-  if (name == VCA::INFO.NAME) 
-    return VCA::buildFromString(s);
-
-  if (name == Amplifier::INFO.NAME)
-    return Amplifier::buildFromString(s);
-
-  if (name == Mult::INFO.NAME)
-    return Mult::buildFromString(s);
-
-  if (name == Envelope::NAME)
-    return Envelope::buildFromString(s);
-
-  if (name == DCGenerator::NAME)
-    return DCGenerator::buildFromString(s);
-
-  return nullptr;
+  return module;
 }
 
 void ModuleBuilder::deleteModule(Module* m, Patcher* p)
 {
-  if (!m) return;
+  if (!m || !p) 
+  {
+    return;
+  }
 
-  p->deletePatchesWith(m);
+  if (m->getType() == ModuleConfig::Type::SEQUENCER) 
+  {
+    Sequencer::deleteSteps(static_cast<Sequencer&>(*m));
+  }
 
-  Module::deleteModule(m);
+  if (m->getType() != ModuleConfig::Type::SEQUENCERSTEP) 
+  {
+    p->deleteAllPatchesWith(m);
+    Grid::updateSquare(Grid::SquareState::EMPTY, m->getLEDElement().row, m->getLEDElement().col);
+    Module::deleteModule(m);
+  }
 }
 
-Module::Type ModuleBuilder::bankType(size_t bankIndex) 
+ModuleConfig::Type ModuleBuilder::bankType(size_t bankIndex) 
 { 
-  if (bankIndex >= bankOptions.size())
+  if (bankIndex >= bankOptions.size()) 
   {
-    return Module::Type::NONE;
+    return ModuleConfig::Type::NONE;
   }
-  return bankOptions[bankIndex]->m_Type; 
+  return bankOptions[bankIndex]->type;
 }
 
 const char* ModuleBuilder::bankName(size_t bankIndex) 
 { 
-  if (bankIndex >= bankOptions.size())
+  if (bankIndex >= bankOptions.size()) 
   {
+    Serial.println("Bank index null");
     return nullptr;
   }
-  return bankOptions[bankIndex]->m_Name; 
+  return bankOptions[bankIndex]->name;
 }
 
-void ModuleBuilder::displayBank(size_t index)
+void ModuleBuilder::displayBank(int position)
 {
-  DisplayManager::displayBank(Colors::getColor(bankType(index)), bankName(index));
+  size_t index = position - (Grid::ROWS - 1) * Grid::COLS;
+  
+  if (index >= bankOptions.size()) 
+  {
+    return;
+  }
+
+  auto& currentBank = bankOptions[index];
+  uint16_t bankColor = Colors::to565(Colors::getColor(currentBank->type));
+
+  DisplayManager::draw<BankDisplayPage>(
+    currentBank->name,
+    currentBank->description,
+    bankColor);
 }
 
 void ModuleBuilder::slideBankWindow(int amt)
@@ -202,15 +256,21 @@ void ModuleBuilder::slideBankWindow(int amt)
   static size_t startIndex = 0;
   const size_t numOptions = allBankOptions.size();
 
+  if (numOptions == 0) 
+  {
+    return;
+  }
+
   startIndex = (startIndex + amt + numOptions) % numOptions;
 
-  for (size_t i = 0; i < bankOptions.size(); i++)
+  for (size_t i{}; i < bankOptions.size(); i++)
   {
     bankOptions[i] = &allBankOptions[(startIndex + i) % numOptions];
   }
 }
 
-void addBuilderFunc(Module::Type type, std::function<Module*(int, int)> func)
+void ModuleBuilder::registerModule(ModuleConfig::Info info, std::function<Module*()> creatorFunc)
 {
-  moduleFactory[type] = func;
+  moduleFactory[info.TYPE] = creatorFunc;
+  allBankOptions.push_back({info.TYPE, info.NAME, info.DESCRIPTION});
 }

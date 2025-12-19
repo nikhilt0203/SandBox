@@ -7,12 +7,19 @@ class Module;
 
 namespace Serialize
 {
-  Module* buildFromString(std::string s);
-  bool savePatchToFile(std::string filePath);
-  bool loadPatchFromFile(std::string filePath, Patcher* patcher);
-  const std::vector<std::string>& currentPatchToString();
-  int extractIntBetween(const char* startDelimiter, const char* endDelimiter, const std::string& s);
-  int extractIntBetween(size_t startIndex, size_t endIndex, const std::string& s);
-  float extractFloatBetween(const char* startDelimiter, const char* endDelimiter, const std::string& s);
-  float extractFloatBetween(size_t startIndex, size_t endIndex, const std::string& s);
+  const std::vector<std::string>& serializeCurrentPatch();
+  
+  Module* buildFromString(std::string_view s);
+
+  bool savePatchToFile(std::string_view filePath);
+
+  bool loadPatchFromFile(std::string_view filePath, Patcher* patcher);
+
+  int extractIntBetween(const char* startDelimiter, const char* endDelimiter, std::string_view s);
+
+  int extractIntBetween(size_t startIndex, size_t endIndex, std::string_view s);
+
+  float extractFloatBetween(const char* startDelimiter, const char* endDelimiter, std::string_view s);
+
+  float extractFloatBetween(size_t startIndex, size_t endIndex, std::string_view s);
 }

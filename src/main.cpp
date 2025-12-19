@@ -1,9 +1,8 @@
 #include "App.h"
-#include <Arduino.h>
 
 void setup() 
 {
-  App::init(); 
+  App::init();
 }
 
 void loop() 

@@ -1,6 +1,7 @@
 #include "TrellisManager.h"
 #include "ModuleBuilder.h"
 #include "Patcher.h"
+#include "LEDFrameBuffer.h"
 #pragma once
 
 class LEDManager
@@ -12,32 +13,50 @@ public:
 
   static void placeLed(int row, int col, uint32_t color);
 
-  static void displayConnection(Module* src, Module* dest, bool show);
+  static void placeLed(Module* m);
 
-  static void refreshBank(bool show = true);;
+  static void placeLEDElement(ModuleUIElement::LEDElement& ledElement);
 
-  static void clearGrid(bool show = true);
+  static void displayConnection(Module* src, Module* dest);
+
+  static void refreshBank();
+
+  static void clearGrid();
 
   static void refreshGrid(Module* m = nullptr);
 
   static void placeModule(Module* m);
 
-  static void changeSquareBrightness(int position, float brightness);
+  static void renderFrame();
 
-  void playPatchAnimation(Module* src, Module* dest);
-
-  void selectAnimation() {}
-
-  void deleteAnimation() {}
+  static void displayKeyboard();
 
 private:
-  Adafruit_MultiTrellis* trellis;
-  ModuleBuilder* builder;
-  Patcher* patcher;
+  static LEDFrame* getFrameBuffer();
 
-  LEDManager() : trellis(nullptr), patcher(nullptr) {}
+  static LEDFrame* getPreviousFrameBuffer();
+
+  static LEDFrame* popFrame();
+
+private:
+  Adafruit_MultiTrellis* m_Trellis;
+  ModuleBuilder* m_Builder;
+  Patcher* m_Patcher;
+  LEDFrame m_LEDFrameBuffer1;
+  LEDFrame m_LEDFrameBuffer2;
+  std::queue<LEDFrame*> m_LEDDoubleFrameBuffer;
+
+
+  LEDManager() 
+  : m_Trellis(nullptr), 
+    m_Patcher(nullptr),
+    m_LEDFrameBuffer1{},
+    m_LEDFrameBuffer2{},
+    m_LEDDoubleFrameBuffer{}
+  {}
   
-  static bool checkTrellis() { return getInstance().trellis != nullptr; }
-
-  static bool checkPatcher() { return getInstance().patcher != nullptr; }
+  static bool checkPatcher() 
+  { 
+    return getInstance().m_Patcher != nullptr; 
+  }
 };

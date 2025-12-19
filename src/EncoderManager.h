@@ -2,10 +2,13 @@
 #include <Encoder.h>
 #include "Module.h"
 
+#define NUM_ENCODERS 4
+
 namespace EncoderManager 
 {
-  constexpr int NUM_ENCODERS = 4;
-
   void init();
   void update();
+  bool isWaiting();
+  void waitForInput(bool wait = true);
+  int getInput(size_t encoderNum);
 }

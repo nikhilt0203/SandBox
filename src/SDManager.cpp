@@ -1,53 +1,67 @@
 #include "SDManager.h"
 #include "SD.h"
 
+#define MAX_FILES 100
+
+static std::vector<std::string> s_FileContents{};
+static std::vector<std::string> s_DirectoryContents{};
+
 void SDManager::init() 
 {
   if (!SD.begin(BUILTIN_SDCARD)) 
   {
     Serial.println("SD card failed.");
-    while (true) {} // stop if SD is missing
+    while (true) {}
   }
+
   Serial.println("SD initialized successfully.");
 }
 
-bool SDManager::write(const std::vector<std::string>& contents, std::string filePath)
+bool SDManager::write(const std::vector<std::string>& contents, std::string_view filePath)
 {
-  SD.remove(filePath.c_str());
-  File fileOut = SD.open(filePath.c_str(), FILE_WRITE);
+  SD.remove(filePath.data());
+  File fileOut = SD.open(filePath.data(), FILE_WRITE);
+
   if (!fileOut) 
   {
-    Serial.print("Failed to open file for writing: ");
-    Serial.println(filePath.c_str());
+    Serial.print("Failed to open file: ");
+    Serial.println(filePath.data());
+    return false;
+  }
+
+  if (contents.empty()) 
+  {
+    fileOut.close();
     return false;
   }
 
   for (const std::string& s : contents)
-    fileOut.println(s.c_str());
+  {
+    fileOut.println(s.data());
+  }
 
   fileOut.flush();
   fileOut.close();
   return true;
 }
 
-const std::vector<std::string>& SDManager::getFileContents(std::string filePath)
+const std::vector<std::string>& SDManager::getFileContents(std::string_view filePath)
 {
-  static std::vector<std::string> contents;
-  contents.clear();
+  s_FileContents.clear();
 
-  if (!SD.exists(filePath.c_str()))
+  if (!SD.exists(filePath.data()))
   {
     Serial.print("File does not exist: ");
-    Serial.println(filePath.c_str());
-    return contents;
+    Serial.println(filePath.data());
+    return s_FileContents;
   }
 
-  File fileIn = SD.open(filePath.c_str(), FILE_READ);
+  File fileIn = SD.open(filePath.data(), FILE_READ);
   if (!fileIn) 
   {
     Serial.print("Failed to open file: ");
-    Serial.println(filePath.c_str());
-    return contents;
+    Serial.println(filePath.data());
+    return s_FileContents;
   }
 
   while (fileIn.available())
@@ -55,12 +69,37 @@ const std::vector<std::string>& SDManager::getFileContents(std::string filePath)
     String line = fileIn.readStringUntil('\n');
     line.replace("\r", "");
     line.trim();
-    if (line.length() == 0) 
-      continue;
 
-    contents.emplace_back(std::string(line.c_str()));
+    if (line.length() == 0) 
+    { 
+      continue; 
+    }
+    s_FileContents.emplace_back(line.c_str());
   }
 
   fileIn.close();
-  return contents;
+  return s_FileContents;
+}
+
+const std::vector<std::string>& SDManager::getDirectoryContents(std::string_view directoryPath)
+{
+  s_DirectoryContents.clear();
+
+  if (!SD.exists(directoryPath.data()))
+  {
+    Serial.print("File does not exist: ");
+    Serial.println(directoryPath.data());
+    return s_DirectoryContents;
+  }
+
+  File directory = SD.open(directoryPath.data(), FILE_READ);
+  File file = directory.openNextFile();
+
+  while (file) 
+  {
+    s_DirectoryContents.emplace_back(file.name());
+    file = directory.openNextFile();
+  }
+
+  return s_DirectoryContents;
 }

@@ -1,45 +1,54 @@
 #include "Colors.h"
 #include "Module.h"
+#include "Grid.h"
 
-std::vector<Module*> Module::allModules;
+std::vector<Module*> Module::allModules{};
 
-void Module::setColor(Module::Type type) { m_Color = Colors::getColor(type); }
-
-Module::Module(AudioStream* device, const char* name, size_t maxSources, size_t maxDestinations, int row, int col) 
+Module::Module(AudioStream* device, const char* name, size_t maxInputs, size_t maxOutputs) 
 : m_Device(device), 
-  m_DisplayManager(DisplayManager::getInstance()), 
   m_ID(name),
-  m_Ports(maxSources, maxDestinations),
-  m_Row(row),
-  m_Col(col),
-  m_Color(0),
-  m_DisplayUpdated(true)
+  m_UIElement(),
+  m_Ports(maxInputs, maxOutputs),
+  m_DisplayManager(DisplayManager::getInstance()),
+  m_InputPorts(*this, maxInputs),
+  m_OutputPorts(*this, maxOutputs)
 {
-  setName(name);
   allModules.push_back(this);
 }
 
 Module::~Module()
 {
   disconnectAll();
-  m_Device = nullptr;
+  delete m_Device;
 }
 
 void Module::updateModules()
 {
   for (Module* m: allModules)
   {
+    if (!m) 
+    { 
+      continue; 
+    }
     m->update();
   }
 }
 
-Module* Module::getModule(int position)
+Module* Module::getModuleAt(int position)
 {
-  if (position < 0 || position > 55) return nullptr;
+  if (!Grid::isInBounds(position)) 
+  { 
+    return nullptr; 
+  }
+
+  if (Grid::isInBank(position)) 
+  { 
+    return nullptr; 
+  }
 
   for (Module* m : allModules)
   {
-    if (m->getPosition() == position)
+    if (Grid::toPosition(m->getLEDElement().row, m->getLEDElement().col) == position)
     {
       return m;
     }
@@ -47,29 +56,42 @@ Module* Module::getModule(int position)
   return nullptr;
 }
 
-Module* Module::getModuleWithID(int moduleID)
+Module* Module::getModule(int moduleID)
 {
   for (Module* m : allModules)
   {
-    if (!m || m->m_Type == Type::SEQUENCERSTEP) 
-      continue;
-    if (m->getID() == moduleID)
-      return m;
+    if (!m) 
+    { 
+      continue; 
+    }
+    if (m->getType() == ModuleConfig::Type::SEQUENCERSTEP) 
+    { 
+      continue; 
+    }
+    if (m->getID() == moduleID) 
+    { 
+      return m; 
+    }
   }
   return nullptr;
 }
 
-void Module::deleteModule(Module* m)
+void Module::deleteModule(Module* module)
 {
+  if (!module) { 
+    return; 
+  }
+
   for (auto it = allModules.begin(); it != allModules.end(); ++it)
   {
-    if (*it == m)
+    if (*it == module)
     {
-      delete *it;
       allModules.erase(it);
-      break;
+      return;
     }
   }
+  
+  delete module; 
 }
 
 void Module::deleteAllModules()
@@ -79,12 +101,16 @@ void Module::deleteAllModules()
 
   for (Module* m : modules)
   {
-    if (!m) continue;
-    if (m->m_Type == Type::SEQUENCERSTEP) continue;
+    if (!m) { 
+      continue; 
+    }
+    if (m->getType() == ModuleConfig::Type::SEQUENCERSTEP) { 
+      continue; 
+    }
     delete m;
   }
   
-  //IDGenerator::resetAllIDs();
+  ModuleID::resetAllIDs();
 }
 
 void Module::addSource(Module* src)
@@ -95,7 +121,7 @@ void Module::addSource(Module* src)
     return;
   }
 
-  for (int i = 0; i < m_Ports.maxInputs(); i++)
+  for (size_t i{}; i < m_Ports.maxInputs(); i++)
   {
     if (m_Ports.isInputFree(i))
     {
@@ -113,7 +139,7 @@ void Module::addDestination(Module* dest)
     return;
   }
 
-  for (int i = 0; i < m_Ports.maxOutputs(); i++)
+  for (size_t i{}; i < m_Ports.maxOutputs(); i++)
   {
     if (m_Ports.isOutputFree(i))
     {
@@ -123,6 +149,38 @@ void Module::addDestination(Module* dest)
   }
 }
 
+void Module::addSource(Module* src, int portNum)
+{
+  if (m_InputPorts.isFree(portNum)) {
+    m_InputPorts[portNum].connect(src);
+  }
+}
+
+void Module::addDestination(Module* dest, int portNum)
+{
+  if (m_OutputPorts.isFree(portNum)) {
+    m_OutputPorts[portNum].connect(dest);
+  }
+}
+
+// void Module::disconnectFrom(const Module& other)
+// {
+//   for (ModulePort& port : m_InputPorts.getPorts())
+//   {
+//     if (port.m_ConnectedModule == other) { 
+//       port.disconnect(); 
+//     }
+//   }
+
+//   for (ModulePort& port : m_OutputPorts.getPorts())
+//   {
+//     if (port.m_ConnectedModule == other) { 
+//       port.disconnect(); 
+//     } 
+//   }
+// } 
+
+
 void Module::disconnectFrom(Module* other)
 {
   if (!other)
@@ -131,8 +189,8 @@ void Module::disconnectFrom(Module* other)
     return;
   }
 
-  Serial.printf("\nDisconnecting %s from %s\n", this->getName().c_str(), other->getName().c_str());
-  for (int i = 0; i < m_Ports.maxInputs(); i++)
+  Serial.printf("\nDisconnecting %s from %s\n", this->getName().data(), other->getName().data());
+  for (size_t i{}; i < m_Ports.maxInputs(); i++)
   {
     if (m_Ports.inputModuleAt(i) == other)
     {
@@ -141,7 +199,7 @@ void Module::disconnectFrom(Module* other)
     }
   }
 
-  for (int i = 0; i < m_Ports.maxOutputs(); i++)
+  for (size_t i{}; i < m_Ports.maxOutputs(); i++)
   {
     if (m_Ports.outputModuleAt(i) == other)
     {
@@ -155,39 +213,42 @@ const std::vector<Module*>& Module::getAllModules() { return allModules; }
 
 void Module::disconnectAll() 
 { 
-  for (int i = 0; i < m_Ports.maxInputs(); i++) 
+  for (size_t i{}; i < m_Ports.maxInputs(); i++) 
   {
-    if (Module* m = m_Ports.inputModuleAt(i))
-    {
+    if (Module* m = m_Ports.inputModuleAt(i)) {
       m->disconnectFrom(this);
     }
   }
 
-  for (int i = 0; i < m_Ports.maxOutputs(); i++) 
+  for (size_t i{}; i < m_Ports.maxOutputs(); i++) 
   {
-    if (Module* m = m_Ports.outputModuleAt(i))
-    {
+    if (Module* m = m_Ports.outputModuleAt(i)) {
       m->disconnectFrom(this);
     }
   }
   m_Ports.disconnectAll();
 } 
 
-void Module::setName(const char* name) { m_ID.setName(name); }
+// void Module::disconnectAll() 
+// { 
+//   for (ModulePort& port : m_InputPorts.getPorts()) 
+//   {
+//     if (!port.isFree()) 
+//     {
+//       port.m_ConnectedModule->disconnectFrom(this);
+//       port.disconnect();
+//     }
+//   }
 
-void Module::setID(int moduleID) { m_ID.setIDNum(moduleID); }
-
-void Module::setPosition(int row, int col)
-{
-  if (row > 7 || row < 0 || col > 7 || col < 0)
-  {
-    Serial.println("Error: Invalid position.");
-    return;
-  }
-
-  m_Row = row;
-  m_Col = col;
-}
+//   for (ModulePort& port : m_OutputPorts.getPorts()) 
+//   {
+//     if (!port.isFree()) 
+//     {
+//       port.m_ConnectedModule->disconnectFrom(this);
+//       port.disconnect();
+//     }
+//   }
+// } 
 
 AudioStream* Module::getInputDevice() const
 {
@@ -198,57 +259,3 @@ AudioStream* Module::getInputDevice() const
   }
   return m_Device;
 }
-
-//By default the output and input devices are the same
-AudioStream* Module::getOutputDevice() const { return getInputDevice(); }
-
-int Module::getOpenInputPort() const { return m_Ports.getOpenInputPort(); }
-
-int Module::getOpenOutputPort() const{ return m_Ports.getOpenOutputPort(); }
-
-bool Module::inputsFull() const { return m_Ports.inputsFull(); }
-
-bool Module::outputsFull() const { return m_Ports.outputsFull(); }
-
-const std::string& Module::getName() const { return m_ID.getName(); }
-
-int Module::getRow() const { return m_Row; }
-
-int Module::getCol() const { return m_Col; }
-
-int Module::getPosition() const { return m_Col + m_Row * 8; }
-
-int Module::getID() const { return m_ID.getIDNum(); }
-
-const std::vector<Port>& Module::getOutputs() const { return m_Ports.getOutputs(); }
-
-const std::vector<Port>& Module::getInputs() const { return m_Ports.getInputs(); }
-
-const ModuleUIElement& Module::getUIElement() const { return m_UIElement; }
-
-bool Module::isDisplayUpdated() const { return m_DisplayUpdated; }
-
-uint32_t Module::getColor() const { return m_Color; }
-
-void Module::setColor(uint32_t hexValue) 
-{ 
-  m_Color = hexValue; 
-  m_UIElement.updateColor(m_Color);
-  m_DisplayUpdated = false;
-}
-
-void Module::markDisplayUpdated(bool isUpdated) { m_DisplayUpdated = isUpdated; }
-
-void Module::changeParameter(int parameterNum, int amt) {}
-
-void Module::pressRisingEdge() 
-{
-  m_DisplayManager.displayMe(this);
- //DisplayManager::print(m_UIElement.getDisplayElement().parameters);
-}
-
-void Module::pressFallingEdge() {}
-
-void Module::update() {}
-
-std::string Module::toString() { return ""; }

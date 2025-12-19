@@ -1,10 +1,14 @@
 #include "LEDManager.h"
+#include "LEDUIElement.h"
+#include "ModuleUIElement.h"
 #include "Colors.h"
-#include "SelectionManager.h"
+#include "SelectionHandler.h"
 #include "Pathfinder.h"
 #include "Grid.h"
+#include <cmath>
+#include <cstring>
 
-std::array<uint32_t, 64> colorGrid = {0};
+#define LED_BRIGHTNESS 150
 
 LEDManager& LEDManager::getInstance()
 { 
@@ -14,200 +18,183 @@ LEDManager& LEDManager::getInstance()
 
 void LEDManager::init(Adafruit_MultiTrellis* t, Patcher* p)
 {
-  getInstance().patcher = p;
-  getInstance().trellis = t;
+  getInstance().m_Patcher = p;
+  getInstance().m_Trellis = t;
+
+  getInstance().m_LEDDoubleFrameBuffer.push(&getInstance().m_LEDFrameBuffer1);
+  getInstance().m_LEDDoubleFrameBuffer.push(&getInstance().m_LEDFrameBuffer2);
 }
 
-void LEDManager::changeSquareBrightness(int position, float brightness)
+LEDFrame* LEDManager::getFrameBuffer()
 {
-  if (colorGrid[position] == 0x000000) return;
+  return getInstance().m_LEDDoubleFrameBuffer.front();  
+}
 
-  static int lastPosition = -1;
-  if (lastPosition == position) return;
-  lastPosition = position;
+LEDFrame* LEDManager::getPreviousFrameBuffer()
+{
+  return getInstance().m_LEDDoubleFrameBuffer.back();  
+}
 
-  placeLed(position / 8, position % 8, 
-    Colors::changeBrightness(Module::getModule(position)->getColor(), brightness));
-  getInstance().trellis->show();
+LEDFrame* LEDManager::popFrame()
+{
+  auto& frameBuffers = getInstance().m_LEDDoubleFrameBuffer;
+  LEDFrame* frame = frameBuffers.front();
+  frameBuffers.pop();
+  return frame;
+}
+
+void drawBuffer(Adafruit_MultiTrellis* trellis, LEDFrameBuffer* buffer, size_t start, size_t numPixels)
+{
+  for (size_t i{}; i < numPixels; i++)
+  {
+    size_t index = start + i;
+    trellis->setPixelColor(index, (*buffer)[index]);
+  }
+  trellis->show();
+}
+
+void LEDManager::renderFrame()
+{
+  auto& ledManager = getInstance();
+  LEDFrame* currentFrame = ledManager.popFrame();
+  LEDFrameBuffer* currentBuffer = currentFrame->data();
+  LEDFrameBuffer* previousBuffer = ledManager.getPreviousFrameBuffer()->data();
+  constexpr float brightness = LED_BRIGHTNESS / 255.0f;
+
+  Adafruit_MultiTrellis* trellis = ledManager.m_Trellis;
+  for (size_t i{}; i < currentBuffer->size(); i++)
+  {
+    //skip if the pixel hasn't changed
+    if (currentBuffer->at(i) == previousBuffer->at(i)) 
+    {
+      continue;
+    }
+    previousBuffer->at(i) = currentBuffer->at(i);
+    trellis->setPixelColor(i, Colors::changeBrightness(currentBuffer->at(i), brightness));
+  }
+  trellis->show();
+  ledManager.m_LEDDoubleFrameBuffer.push(currentFrame);
 }
 
 void LEDManager::placeLed(int row, int col, uint32_t color)
 {
-  if (row > Grid::ROWS || col > Grid::COLS || !checkTrellis()) 
-    return;
-  getInstance().trellis->setPixelColor(col, row, color);
-  colorGrid[Grid::toPosition(row, col)] = color;
+  getFrameBuffer()->drawPixel(row, col, color);
 }
 
-uint32_t getWireColor(Module* m, float brightness) { return Colors::changeBrightness(m->getColor(), brightness); }
-
-void LEDManager::displayConnection(Module* src, Module* dest, bool show)
+void LEDManager::placeLEDElement(ModuleUIElement::LEDElement& ledElement)
 {
-  if (!checkTrellis()) 
-    return;
-  if (!src || !dest) 
-    return;
+  int row = ledElement.row;
+  int col = ledElement.col;
+  Grid::updateSquare(Grid::SquareState::MODULE, row, col);
+  getFrameBuffer()->drawPixel(row, col, ledElement.color);
+}
 
-  uint32_t color = getWireColor(src, 0.1);
+void LEDManager::placeLed(Module* m)
+{
+  if (m) 
+  { 
+    placeLEDElement(m->getLEDElement());
+  }
+}
 
-  Pathfinder::Position destPos = {dest->getCol(), dest->getRow()};
-  Pathfinder::Position currentPos = {src->getCol(), src->getRow()};
+uint32_t getWireColor(Module* m, float brightness) 
+{ 
+  if (!m)
+  {
+    return 0;
+  }
+  return Colors::changeBrightness(m->getColor(), brightness); 
+}
+
+void LEDManager::displayConnection(Module* src, Module* dest)
+{
+  if (!src || !dest) { 
+    return; 
+  }
+
+  uint32_t color = getWireColor(src, 0.08f);
+
+  auto& destLedElement = dest->getLEDElement();
+  auto& srcLedElement = src->getLEDElement();
+
+  Pathfinder::Position destPos{destLedElement.col, destLedElement.row};
+  Pathfinder::Position currentPos{srcLedElement.col, srcLedElement.row};
 
   while (currentPos != destPos)
   {
     Pathfinder::Position nextPos = Pathfinder::findBestMove({currentPos.x, currentPos.y}, destPos);
-    if (!nextPos)
-      break;
-    if (nextPos.x == -1 || nextPos.y == -1)
-      break;
-    if (nextPos == destPos) 
-      break;
-    if (!Grid::isValid(nextPos.y, nextPos.x))
-      break;
+
+    if (!nextPos || nextPos == destPos) 
+    { 
+      break; 
+    }
 
     int rowIndex = nextPos.y;
     int colIndex = nextPos.x;
 
+    if (!Grid::isInBounds(rowIndex, colIndex) || Grid::isInBank(rowIndex, colIndex)) 
+    { 
+      break; 
+    }
+
     Grid::SquareState square = Grid::stateAt(rowIndex, colIndex);
+
     if (square == Grid::SquareState::EMPTY || square == Grid::SquareState::WIRE)
     {
-      placeLed(rowIndex, colIndex, color);
-      Grid::setSquare(Grid::SquareState::WIRE, rowIndex, colIndex);
+      Grid::updateSquare(Grid::SquareState::WIRE, rowIndex, colIndex);
+      getFrameBuffer()->drawPixel(rowIndex, colIndex, color);
     }
+    
     currentPos = nextPos;
   }
-  // while (rowIndex < dRow)
-  // {
-  //   rowIndex++;
-  //   if (rowIndex == dRow && colIndex == dCol) break;
-  //   if (!Grid::isModuleAt(rowIndex, colIndex))
-  //   {
-  //     placeLed(rowIndex, colIndex, color);
-  //     Grid::setSquare(Grid::SquareState::WIRE, rowIndex, colIndex);
-  //     if (Grid::stateAt(rowIndex, colIndex) == Grid::SquareState::WIRE)
-  //     {
-  //       Serial.println("Set square to Wire");
-  //     }
-  //   }
-  // }
-
-  // while (rowIndex > dRow)
-  // {
-  //   rowIndex--;
-  //   if (rowIndex == dRow && colIndex == dCol) break;
-  //   if (!Grid::isModuleAt(rowIndex, colIndex))
-  //   {
-  //     placeLed(rowIndex, colIndex, color);
-  //     Grid::setSquare(Grid::SquareState::WIRE, rowIndex, colIndex);
-  //     if (Grid::stateAt(rowIndex, colIndex) == Grid::SquareState::WIRE)
-  //     {
-  //       Serial.println("Set square to Wire");
-  //     }
-  //   }
-  // }
-
-  // while (colIndex < dCol)
-  // {
-  //   colIndex++;
-  //   if (rowIndex == dRow && colIndex == dCol) break;
-  //   if (!Grid::isModuleAt(rowIndex, colIndex))
-  //   {
-  //     placeLed(rowIndex, colIndex, color);
-  //     Grid::setSquare(Grid::SquareState::WIRE, rowIndex, colIndex);
-  //     if (Grid::stateAt(rowIndex, colIndex) == Grid::SquareState::WIRE)
-  //     {
-  //       Serial.println("Set square to Wire");
-  //     }
-  //   }
-  // }
-
-  // while (colIndex > dCol)
-  // {
-  //   colIndex--;
-  //   if (rowIndex == dRow && colIndex == dCol) break;
-  //   if (!Grid::isModuleAt(rowIndex, colIndex))
-  //   {
-  //     placeLed(rowIndex, colIndex, color);
-  //     Grid::setSquare(Grid::SquareState::WIRE, rowIndex, colIndex);
-  //     if (Grid::stateAt(rowIndex, colIndex) == Grid::SquareState::WIRE)
-  //     {
-  //       Serial.println("Set square to Wire");
-  //     }
-  //   }
-  // }
-
-  if (show) getInstance().trellis->show();
 }
 
-void LEDManager::refreshBank(bool show)
+void LEDManager::refreshBank()
 {
-  if (!checkTrellis() || !checkPatcher()) return;
-
-  if (SelectionManager::isEditMode())
+  if (SelectionHandler::isEditMode())
   {
-    for (int i = 0; i < 8; i++)
+    for (uint8_t i{}; i < 8; i++)
     {
-      placeLed(7, i, Colors::getColor(ModuleBuilder::bankType(i)));
+      getFrameBuffer()->drawPixel(7, i, Colors::getColor(ModuleBuilder::bankType(i)));
     }
   }
   else
   {
-    for (int i = 0; i < 8; i++)
+    for (uint8_t i{}; i < 8; i++)
     {
-      placeLed(7, i, 0x000000);
+      getFrameBuffer()->drawPixel(7, i, 0x000000);
     }
   }
-  if (show) getInstance().trellis->show();
 }
 
-void LEDManager::clearGrid(bool show)
+void LEDManager::clearGrid()
 {
-  if (!checkTrellis()) return;
-
-  for (int row = 0; row < Grid::ROWS; row++)
-  {
-    for (int col = 0; col < Grid::COLS; col++)
-    {
-      placeLed(row, col, 0x000000);
-    }
-  }
-  if (show) getInstance().trellis->show();
+  getFrameBuffer()->clear();
 }
 
 void LEDManager::refreshGrid(Module* m)
 {
-  if (!checkTrellis() || !checkPatcher()) return;
-
   if (m)
   {
-    placeLed(m->getRow(), m->getCol(), m->getColor());
-    getInstance().trellis->show();
+    placeLed(m);
     return;
   }
 
-  //clear grid
-  for (int row = 0; row < Grid::ROWS; row++)
-  {
-    for (int col = 0; col < Grid::COLS; col++)
-    {
-      placeLed(row, col, 0x000000);
-    }
-  }
+  LEDFrame* currentFrame = getFrameBuffer();
+  currentFrame->clear();
 
-  //Update bank
-  if (SelectionManager::isEditMode())
+  if (SelectionHandler::isEditMode())
   {
-    for (int i = 0; i < 8; i++)
+    for (uint8_t i{}; i < 8; i++)
     {
-      placeLed(7, i, Colors::getColor(ModuleBuilder::bankType(i)));
+      currentFrame->drawPixel(7, i, Colors::getColor(ModuleBuilder::bankType(i)));
     }
   }
 
   //Modules
-  for (Module* m : Module::allModules()) 
+  for (Module* m : Module::getAllModules()) 
   {
-    placeLed(m->getRow(), m->getCol(), m->getColor());
-    Grid::setSquare(Grid::SquareState::MODULE, m->getRow(), m->getCol());
+    placeLed(m);
   }
 
   Grid::update();
@@ -215,10 +202,15 @@ void LEDManager::refreshGrid(Module* m)
   //Connections
   for (Patch* p : Patcher::getAllPatches()) 
   {
-    displayConnection(p->source, p->destination, false);
+    displayConnection(p->source, p->destination);
   }
+}
 
-  getInstance().trellis->show();
+void LEDManager::displayKeyboard()
+{
+  clearGrid();
+  KeyboardLEDElement keyboardElement(getFrameBuffer());
+  keyboardElement.draw();
 }
 
 void LEDManager::placeModule(Module* m)
@@ -228,13 +220,6 @@ void LEDManager::placeModule(Module* m)
     Serial.println("Error: Cannot place module as it does not exist.");
     return;
   }
-  placeLed(m->getRow(), m->getCol(), m->getColor());
+  placeLEDElement(m->getLEDElement());
   Grid::update();
 }
-
-// void LEDManager::playPatchAnimation(Module* src, Module* dest) 
-// {
-//   clearGrid();
-//   placeLed(src->getRow(), src->getCol(), Colors::changeBrightness(src->getColor(), 0.5));
-//   placeLed(dest->getRow(), dest->getCol(), Colors::changeBrightness(dest->getColor(), 0.5));
-// }

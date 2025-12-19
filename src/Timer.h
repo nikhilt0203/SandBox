@@ -4,11 +4,16 @@
 class Timer
 {
 public:
-  Timer() : lastTime(0) {}
-  inline void reset() { lastTime = millis(); }
-  inline bool hasReached(unsigned long maxMs) const { return millis() - lastTime > maxMs; }
-  inline unsigned long read() const { return millis() - lastTime; }
+  Timer() = default;
+
+  void start() { lastTime = millis(); }
+
+  void reset() { lastTime = millis(); }
+
+  bool hasReached(unsigned long milliseconds) const { return millis() - lastTime > milliseconds; }
+  
+  unsigned long read() const { return millis() - lastTime; }
   
 private:
-  unsigned long lastTime;
+  unsigned long lastTime{};
 };

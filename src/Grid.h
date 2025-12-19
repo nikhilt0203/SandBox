@@ -5,6 +5,7 @@ class Grid
 {
 public:
   static constexpr int ROWS = 8;
+
   static constexpr int COLS = 8;
 
   enum class SquareState
@@ -12,17 +13,16 @@ public:
     MODULE, WIRE, EMPTY, INVALID
   };
 
-  static std::array<SquareState, 64> grid;
-
+public:
   static void init();
   
   static void update();
 
   static void clear();
 
-  static void setSquare(SquareState state, int position);
+  static void updateSquare(SquareState state, int position);
 
-  static void setSquare(SquareState state, int row, int col);
+  static void updateSquare(SquareState state, int row, int col);
 
   static SquareState stateAt(int position);
 
@@ -35,6 +35,10 @@ public:
   static bool isValid(int position) { return stateAt(position) != SquareState::INVALID;};
 
   static bool isValid(int row, int col) { return isValid(toPosition(row, col)); } 
+
+  static bool isInBounds(int position) { return position >= 0 && position < ROWS * COLS; };
+
+  static bool isInBounds(int row, int col) { return isInBounds(toPosition(row, col)); }
 
   static bool isInBank(int position) { return position >= 56 && position <= 63; }
 

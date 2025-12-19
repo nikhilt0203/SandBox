@@ -58,6 +58,11 @@
     "climits": "cpp",
     "dcgenerator": "c",
     "encodermanager": "cpp",
-    "audiocvinput": "cpp"
-  }
+    "audiocvinput": "cpp",
+    "audiotriggeroutput": "cpp"
+  },
+"editor.detectIndentation": false,
+"editor.indentSize": "tabSize",
+"editor.tabSize": 2,
+"cmake.sourceDirectory": "/Users/nikhiltalwalkar/Projects/teensy41/lib/Adafruit BusIO"
 }

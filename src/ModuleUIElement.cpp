@@ -1,47 +1,57 @@
 #include "ModuleUIElement.h"
+#include "Colors.h"
 #include <Arduino.h>
 
-ModuleUIElement::ModuleUIElement(const char* displayName, uint32_t color, std::initializer_list<const char*> parameterNames)
+ModuleUIElement::ModuleUIElement(ModuleConfig::Info info)
 {
-  updateColor(color);
-  m_DisplayElement.parameters.reserve(parameterNames.size());
-  m_DisplayElement.displayName = displayName;
+  updateColor(Colors::getColor(info.TYPE));
+  m_DisplayElement.parameters.reserve(info.PARAMETER_NAMES.size());
+  m_DisplayElement.displayName = info.NAME;
 
   int parameterNum = 0;
-  for (const char* name: parameterNames)
+  for (const char* name: info.PARAMETER_NAMES)
   {
     m_DisplayElement.parameters.push_back({name, 0, 0.0, parameterNum});
     parameterNum++;
   }
 }
 
-ModuleUIElement::ModuleUIElement()
+ModuleUIElement::ModuleUIElement() 
+: m_LEDElement(), 
+  m_DisplayElement(), 
+  m_Color(0) 
+{}
+
+void ModuleUIElement::update(ModuleConfig::Info info)
 {
-  m_DisplayElement.displayName = nullptr;
-  m_DisplayElement.isUpdated = false;
+  updateColor(Colors::getColor(info.TYPE));
+  m_DisplayElement.displayName = info.NAME;
   m_DisplayElement.parameters.clear();
-  m_LEDElement.color = 0;
-  m_LEDElement.isUpdated = false;
+  m_DisplayElement.parameters.reserve(info.PARAMETER_NAMES.size());
+
+  int parameterNum = 0;
+  for (const char* name: info.PARAMETER_NAMES)
+  {
+    m_DisplayElement.parameters.push_back({name, 0, 0.0, parameterNum});
+    parameterNum++;
+  }
 }
 
-void ModuleUIElement::updateColor(uint32_t color) { m_LEDElement.color = color; }
+void ModuleUIElement::updateColor(uint32_t color) 
+{ 
+  m_LEDElement.color = color;
+  notifyChange<LEDElement>(); 
 
-void ModuleUIElement::updateDisplayName(const char* name) { m_DisplayElement.displayName = name; }
+  m_DisplayElement.color = color;
+  notifyChange<DisplayElement>();
 
-const char* ModuleUIElement::getDisplayName() const { return m_DisplayElement.displayName; }
-
-const char* ModuleUIElement::getParameterName(int parameterNum) const { return m_DisplayElement.parameters[parameterNum].name; }
-
-std::variant<float, int> ModuleUIElement::getParameterValue(int parameterNum) const { return m_DisplayElement.parameters[parameterNum].value; }
-
-const ModuleUIElement::LEDElement& ModuleUIElement::getLEDElement() const { return m_LEDElement; }
-
-const ModuleUIElement::DisplayElement& ModuleUIElement::getDisplayElement() const { return m_DisplayElement; }
+  m_Color = color;
+}
 
 void ModuleUIElement::updateParameter(int parameterNum, int value, int maxValue) 
 { 
   m_DisplayElement.parameters[parameterNum].value = value; 
-  m_DisplayElement.parameters[parameterNum].percentage = (float)value / maxValue; 
+  m_DisplayElement.parameters[parameterNum].percentage = static_cast<float>(value) / maxValue; 
   m_DisplayElement.isUpdated = true;
 }
 

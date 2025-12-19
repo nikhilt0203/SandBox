@@ -6,50 +6,103 @@
 class Patch
 {
 public:
-  AudioConnection* patchCord;
+  std::unique_ptr<AudioConnection> patchCord;
   Module* source;
-  int sourcePort;
+  int deviceSourcePort;
+  int moduleSourcePort;
   Module* destination;
-  int destinationPort;
+  int deviceDestinationPort;
+  int moduleDestinationPort;
+  std::string name{};
 
-  Patch(Module* src, int srcPort, Module* dest, int destPort)
+  Patch(Module* src, Port srcPort, Module* dest, Port destPort)
   : source(src), 
-    sourcePort(srcPort), 
+    deviceSourcePort(srcPort.m_DevicePortNum), 
+    moduleSourcePort(srcPort.m_ModulePortNum),
     destination(dest), 
-    destinationPort(destPort) 
+    deviceDestinationPort(destPort.m_DevicePortNum),
+    moduleDestinationPort(destPort.m_ModulePortNum)
   {
     AudioStream* srcDevice = src->getOutputDevice();
     AudioStream* destDevice = dest->getInputDevice();
-    if (!srcDevice || !destDevice) 
-    {
-      Serial.println("Invalid source or destination device for patch: " + src->getID() + String(", ") + sourcePort + String(", ") + dest->getID() + String(", ") + destinationPort);
 
+    if (!srcPort.isFree() || !destPort.isFree()) 
+    {
+      Serial.println("Invalid source or destination port for patch: " + String(src->getID()) + String(", ") + String(deviceSourcePort) + String(", ") + String(dest->getID()) + String(", ") + String(deviceDestinationPort));
       patchCord = nullptr;
       return;
     }
-    patchCord = new AudioConnection(*srcDevice, sourcePort, *destDevice, destinationPort);
+
+    if (!srcDevice) 
+    {
+      Serial.println("Invalid source device for patch: " + String(src->getID()) + String(", ") + String(deviceSourcePort) );
+      patchCord = nullptr;
+      return;
+    }
+
+    if (!destDevice) 
+    {
+      Serial.println("Invalid destination device for patch: " + String(dest->getID()) + String(", ") + String(deviceDestinationPort));
+      patchCord = nullptr;
+      return;
+    }
+
+    Serial.printf("Creating patch from module %s port %d to module %s port %d\n", src->getName().data(), srcPort.m_ModulePortNum, dest->getName().data(), destPort.m_ModulePortNum);
+    AudioNoInterrupts();
+    patchCord = std::make_unique<AudioConnection>(*srcDevice, deviceSourcePort, *destDevice, deviceDestinationPort);
+    AudioInterrupts();
   }
 
-  ~Patch() 
-  { 
-    delete patchCord; 
-    patchCord = nullptr; 
-  }
-
-  std::string toString()
+  Patch(Module* src, int srcPort, Module* dest, int destPort)
+  : source(src), 
+    deviceSourcePort(srcPort), 
+    destination(dest), 
+    deviceDestinationPort(destPort)
   {
-    //Format: Patch{sourceID,sourcePort,destinationID,destinationPort}
-    std::string s = "Patch{";
-    s += std::to_string(source->getID()) + "," +
-        std::to_string(sourcePort) + "," +
+    AudioStream* srcDevice = src->getOutputDevice();
+    AudioStream* destDevice = dest->getInputDevice();
+
+    if (srcPort == -1 || destPort == -1) 
+    {
+      Serial.println("Invalid source or destination port for patch: " + String(src->getID()) + String(", ") + String(deviceSourcePort) + String(", ") + String(dest->getID()) + String(", ") + String(deviceDestinationPort));
+      patchCord = nullptr;
+      return;
+    }
+
+    if (!srcDevice) 
+    {
+      Serial.println("Invalid source device for patch: " + String(src->getID()) + String(", ") + String(deviceSourcePort) );
+      patchCord = nullptr;
+      return;
+    }
+
+    if (!destDevice) 
+    {
+      Serial.println("Invalid destination device for patch: " + String(dest->getID()) + String(", ") + String(deviceDestinationPort));
+      patchCord = nullptr;
+      return;
+    }
+    
+    Serial.printf("Creating patch from module %s port %d to module %s port %d\n", src->getName().data(), srcPort, dest->getName().data(), destPort);
+    AudioNoInterrupts();
+    patchCord = std::make_unique<AudioConnection>(*srcDevice, deviceSourcePort, *destDevice, deviceDestinationPort);
+    AudioInterrupts();
+  }
+
+  std::string_view serialize()
+  {
+    //Format: Patch{sourceID,deviceSourcePort,destinationID,deviceDestinationPort}
+    name = "Patch{";
+    name += std::to_string(source->getID()) + "," +
+        std::to_string(deviceSourcePort) + "," +
         std::to_string(destination->getID()) + "," +
-        std::to_string(destinationPort) + "}";
-    return s;
+        std::to_string(deviceDestinationPort) + "}";
+    return name;
   }
 
-  static Patch* buildFromString(std::string s)
+  static Patch* buildFromString(std::string_view s)
   {
-    //Format: Patch{sourceID,sourcePort,destinationID,destinationPort}
+    //Format: Patch{sourceID,deviceSourcePort,destinationID,deviceDestinationPort}
     int firstComma = s.find(",");
     int secondComma = s.find(",", firstComma + 1);
     int thirdComma = s.find(",", secondComma + 1);
@@ -59,12 +112,12 @@ public:
     int destID =   Serialize::extractIntBetween(secondComma, thirdComma, s);
     int destPort = Serialize::extractIntBetween(thirdComma, s.find("}"), s);
 
-    Module* src = Module::getModuleWithID(srcID);
-    Module* dest = Module::getModuleWithID(destID);
+    Module* src = Module::getModule(srcID);
+    Module* dest = Module::getModule(destID);
 
     if (!src || !dest)
     {
-      Serial.println("Can't create patch, source or destination is invalid");
+      Serial.println("Cant create patch, source or destination is invalid");
       Serial.printf("%d, %d, %d, %d\n", srcID, srcPort, destID, destPort);
       return nullptr;
     }
