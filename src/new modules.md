@@ -2,7 +2,7 @@ Requirements for adding a new module:
 
   1. Must derive from Module base class
 
-  2. Must have a static Module::ModuleConfig with the required fields
+  2. Must have a static Module::ModuleConfig::Info with the required fields
   
   3. New Type must be added in ModuleConfig.h
 
