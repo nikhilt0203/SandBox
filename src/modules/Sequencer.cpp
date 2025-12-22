@@ -214,7 +214,7 @@ void Sequencer::deleteSteps(Sequencer& sequencer)
   auto& steps = sequencer.m_Steps;
   for (auto& step : steps)
   {
-    Grid::updateSquare(Grid::SquareState::EMPTY, step->getLEDElement().row, step->getLEDElement().col);
+    Grid::updateSquare(Grid::Space::EMPTY, step->getLEDElement().row, step->getLEDElement().col);
     Module::deleteModule(step.release());
   }
   steps.clear();

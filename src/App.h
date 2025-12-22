@@ -307,7 +307,8 @@ namespace App
       std::string title = "Deleted " + std::string(m->getName());
       std::string message = "and " + std::to_string(numConnections) + " connections";
       DisplayManager::draw<Dialog>(title, message, ILI9341_YELLOW);
-      ModuleBuilder::deleteModule(m, &patcher);
+      patcher.deleteAllPatchesWith(m);
+      ModuleBuilder::deleteModule(m);
     }
   }
 

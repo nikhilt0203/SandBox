@@ -14,7 +14,6 @@
 #include "modules/DCGenerator.h"
 #include "modules/Oscilloscope.h"
 #include "modules/NoiseGenerator.h"
-#include "Patcher.h"
 #include "Grid.h"
 #include "UIElements.h"
 #include <string>
@@ -74,7 +73,7 @@ void placeModule(Module* m, int row, int col)
     return; 
   }
   m->getLEDElement().setPosition(row, col);
-  Grid::updateSquare(Grid::SquareState::MODULE, row, col);
+  Grid::updateSquare(Grid::Space::MODULE, row, col);
 }
 
 Module* ModuleBuilder::createModule(ModuleConfig::Type type, int row, int col)
@@ -194,10 +193,9 @@ Module* ModuleBuilder::buildFromString(std::string_view s)
   return module;
 }
 
-void ModuleBuilder::deleteModule(Module* m, Patcher* p)
+void ModuleBuilder::deleteModule(Module* m)
 {
-  if (!m || !p) 
-  {
+  if (!m) {
     return;
   }
 
@@ -208,8 +206,7 @@ void ModuleBuilder::deleteModule(Module* m, Patcher* p)
 
   if (m->getType() != ModuleConfig::Type::SEQUENCERSTEP) 
   {
-    p->deleteAllPatchesWith(m);
-    Grid::updateSquare(Grid::SquareState::EMPTY, m->getLEDElement().row, m->getLEDElement().col);
+    Grid::updateSquare(Grid::Space::EMPTY, m->getLEDElement().row, m->getLEDElement().col);
     Module::deleteModule(m);
   }
 }
@@ -225,10 +222,8 @@ ModuleConfig::Type ModuleBuilder::bankType(size_t bankIndex)
 
 const char* ModuleBuilder::bankName(size_t bankIndex) 
 { 
-  if (bankIndex >= bankOptions.size()) 
-  {
-    Serial.println("Bank index null");
-    return nullptr;
+  if (bankIndex >= bankOptions.size()) {
+    return "";
   }
   return bankOptions[bankIndex]->name;
 }
@@ -237,8 +232,7 @@ void ModuleBuilder::displayBank(int position)
 {
   size_t index = position - (Grid::ROWS - 1) * Grid::COLS;
   
-  if (index >= bankOptions.size()) 
-  {
+  if (index >= bankOptions.size()) {
     return;
   }
 
@@ -256,8 +250,7 @@ void ModuleBuilder::slideBankWindow(int amt)
   static size_t startIndex = 0;
   const size_t numOptions = allBankOptions.size();
 
-  if (numOptions == 0) 
-  {
+  if (numOptions == 0) {
     return;
   }
 

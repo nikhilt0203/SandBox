@@ -8,7 +8,7 @@ public:
 
   static constexpr int COLS = 8;
 
-  enum class SquareState
+  enum class Space
   {
     MODULE, WIRE, EMPTY, INVALID
   };
@@ -20,19 +20,19 @@ public:
 
   static void clear();
 
-  static void updateSquare(SquareState state, int position);
+  static void updateSquare(Space state, int position);
 
-  static void updateSquare(SquareState state, int row, int col);
+  static void updateSquare(Space state, int row, int col);
 
-  static SquareState stateAt(int position);
+  static Space stateAt(int position);
 
-  static SquareState stateAt(int row, int col) { return stateAt(toPosition(row, col)); }
+  static Space stateAt(int row, int col) { return stateAt(toPosition(row, col)); }
 
-  static bool isModuleAt(int position) { return stateAt(position) == SquareState::MODULE; }
+  static bool isModuleAt(int position) { return stateAt(position) == Space::MODULE; }
 
-  static bool isModuleAt(int row, int col) { return stateAt(toPosition(row, col)) == SquareState::MODULE; }
+  static bool isModuleAt(int row, int col) { return stateAt(toPosition(row, col)) == Space::MODULE; }
 
-  static bool isValid(int position) { return stateAt(position) != SquareState::INVALID;};
+  static bool isValid(int position) { return stateAt(position) != Space::INVALID;};
 
   static bool isValid(int row, int col) { return isValid(toPosition(row, col)); } 
 

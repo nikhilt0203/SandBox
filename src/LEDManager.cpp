@@ -8,7 +8,7 @@
 #include <cmath>
 #include <cstring>
 
-#define LED_BRIGHTNESS 150
+#define LED_BRIGHTNESS 180
 
 LEDManager& LEDManager::getInstance()
 { 
@@ -59,14 +59,13 @@ void LEDManager::renderFrame()
   LEDFrame* currentFrame = ledManager.popFrame();
   LEDFrameBuffer* currentBuffer = currentFrame->data();
   LEDFrameBuffer* previousBuffer = ledManager.getPreviousFrameBuffer()->data();
-  constexpr float brightness = LED_BRIGHTNESS / 255.0f;
+  constexpr static float brightness = LED_BRIGHTNESS / 255.0f;
 
   Adafruit_MultiTrellis* trellis = ledManager.m_Trellis;
   for (size_t i{}; i < currentBuffer->size(); i++)
   {
     //skip if the pixel hasn't changed
-    if (currentBuffer->at(i) == previousBuffer->at(i)) 
-    {
+    if (currentBuffer->at(i) == previousBuffer->at(i)) {
       continue;
     }
     previousBuffer->at(i) = currentBuffer->at(i);
@@ -85,22 +84,20 @@ void LEDManager::placeLEDElement(ModuleUIElement::LEDElement& ledElement)
 {
   int row = ledElement.row;
   int col = ledElement.col;
-  Grid::updateSquare(Grid::SquareState::MODULE, row, col);
+  Grid::updateSquare(Grid::Space::MODULE, row, col);
   getFrameBuffer()->drawPixel(row, col, ledElement.color);
 }
 
 void LEDManager::placeLed(Module* m)
 {
-  if (m) 
-  { 
+  if (m) { 
     placeLEDElement(m->getLEDElement());
   }
 }
 
 uint32_t getWireColor(Module* m, float brightness) 
 { 
-  if (!m)
-  {
+  if (!m){
     return 0;
   }
   return Colors::changeBrightness(m->getColor(), brightness); 
@@ -112,42 +109,96 @@ void LEDManager::displayConnection(Module* src, Module* dest)
     return; 
   }
 
-  uint32_t color = getWireColor(src, 0.08f);
-
   auto& destLedElement = dest->getLEDElement();
   auto& srcLedElement = src->getLEDElement();
 
-  Pathfinder::Position destPos{destLedElement.col, destLedElement.row};
-  Pathfinder::Position currentPos{srcLedElement.col, srcLedElement.row};
+  Pathfinder::Position destPos{destLedElement.row, destLedElement.col};
+  Pathfinder::Position currentPos{srcLedElement.row, srcLedElement.col};
 
+  uint32_t color;
   while (currentPos != destPos)
   {
-    Pathfinder::Position nextPos = Pathfinder::findBestMove({currentPos.x, currentPos.y}, destPos);
+    Pathfinder::Position nextPos = Pathfinder::findBestMove({currentPos.row, currentPos.col}, destPos);
 
-    if (!nextPos || nextPos == destPos) 
-    { 
+    if (!nextPos || nextPos == destPos) { 
       break; 
     }
 
-    int rowIndex = nextPos.y;
-    int colIndex = nextPos.x;
+    int row = nextPos.row;
+    int col = nextPos.col;
 
-    if (!Grid::isInBounds(rowIndex, colIndex) || Grid::isInBank(rowIndex, colIndex)) 
-    { 
+    if (!Grid::isInBounds(row, col) || Grid::isInBank(row, col)) { 
       break; 
     }
 
-    Grid::SquareState square = Grid::stateAt(rowIndex, colIndex);
+    Grid::Space square = Grid::stateAt(row, col);
 
-    if (square == Grid::SquareState::EMPTY || square == Grid::SquareState::WIRE)
-    {
-      Grid::updateSquare(Grid::SquareState::WIRE, rowIndex, colIndex);
-      getFrameBuffer()->drawPixel(rowIndex, colIndex, color);
+    if (square == Grid::Space::EMPTY) {
+      color = getWireColor(src, 0.08f);
     }
-    
+    else if (square == Grid::Space::WIRE) {
+      color = Colors::blend(getWireColor(src, 0.08f), 
+        getFrameBuffer()->at(row * Grid::COLS + col), 0.2f);
+    } 
+    else {
+      continue;
+    }
+
+    Grid::updateSquare(Grid::Space::WIRE, row, col);
+    getFrameBuffer()->drawPixel(row, col, color);
+  
     currentPos = nextPos;
   }
 }
+
+// void LEDManager::displayConnection(Module* src, Module* dest)
+// {
+//   if (!src || !dest) { 
+//     return; 
+//   }
+
+//   auto& destLedElement = dest->getLEDElement();
+//   auto& srcLedElement  = src->getLEDElement();
+
+//   std::vector<Pathfinder::Position> path = Pathfinder::findShortestPath(
+//     {destLedElement.row, destLedElement.col},
+//     {srcLedElement.row,  srcLedElement.col}
+//   );
+
+//   if (path.empty()) {
+//     return;
+//   }
+
+//   for (size_t i{1}; i < path.size() - 1; i++)
+//   {
+//     int row = path[i].row;
+//     int col = path[i].col;
+
+//     if (!Grid::isValid(row, col)){
+//       continue;
+//     }
+
+//     Grid::Space square = Grid::stateAt(row, col);
+//     if (square == Grid::Space::MODULE) {
+//       continue;
+//     }
+
+//     uint32_t color;
+//     if (square == Grid::Space::EMPTY) {
+//       color = getWireColor(src, 0.08f);
+//     }
+//     else if (square == Grid::Space::WIRE) {
+//       color = Colors::blend(getWireColor(src, 0.08f), 
+//         getFrameBuffer()->at(row * Grid::COLS + col), 0.2f);
+//     } 
+//     else {
+//       continue;
+//     }
+//     Serial.printf("Drawing wire at (%d, %d)\n", row, col);
+//     Grid::updateSquare(Grid::Space::WIRE, row, col);
+//     getFrameBuffer()->drawPixel(row, col, color);
+//   }
+// }
 
 void LEDManager::refreshBank()
 {

@@ -20,17 +20,22 @@ public:
 
   void drawPixel(uint8_t row, uint8_t col, uint32_t color) 
   {
-    m_Data[Grid::toPosition(row, col) % m_Data.size()] = color;
+    m_Data[Grid::toPosition(row, col)] = color;
   }
 
   void drawPixel(uint8_t position, uint32_t color)
  {
-    m_Data[position % m_Data.size()] = color;
+    m_Data[position] = color;
   }
 
   void clear() 
   { 
     m_Data.fill(0x000000); 
+  }
+
+  uint32_t at(size_t index) const 
+  { 
+    return m_Data[index]; 
   }
 
   uint32_t operator[](size_t index) const 
